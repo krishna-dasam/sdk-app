@@ -46,15 +46,12 @@ public class PdfController {
 
 	@GetMapping("/download/{filename:.+}")
 	public ResponseEntity<Resource> download(@PathVariable String filename) throws MalformedURLException {
-		Path file = resolveSafePath(filename);
-		Resource resource = new UrlResource(file.toUri());
-		if (!resource.exists() || !resource.isReadable()) {
-			return ResponseEntity.notFound().build();
-		}
-		return ResponseEntity.ok()
-				.contentType(MediaType.APPLICATION_PDF)
-				.header(HttpHeaders.CONTENT_DISPOSITION, "inline; filename=\"" + filename + "\"")
-				.body(resource);
+		return servePdf(filename, "inline");
+	}
+
+	@GetMapping("/export/{filename:.+}")
+	public ResponseEntity<Resource> export(@PathVariable String filename) throws MalformedURLException {
+		return servePdf(filename, "attachment");
 	}
 
 	@PostMapping("/upload")
@@ -66,6 +63,18 @@ public class PdfController {
 		Path destination = resolveSafePath(originalFilename);
 		Files.copy(file.getInputStream(), destination, StandardCopyOption.REPLACE_EXISTING);
 		return "Uploaded " + destination.getFileName();
+	}
+
+	private ResponseEntity<Resource> servePdf(String filename, String disposition) throws MalformedURLException {
+		Path file = resolveSafePath(filename);
+		Resource resource = new UrlResource(file.toUri());
+		if (!resource.exists() || !resource.isReadable()) {
+			return ResponseEntity.notFound().build();
+		}
+		return ResponseEntity.ok()
+				.contentType(MediaType.APPLICATION_PDF)
+				.header(HttpHeaders.CONTENT_DISPOSITION, disposition + "; filename=\"" + filename + "\"")
+				.body(resource);
 	}
 
 	private Path resolveSafePath(String filename) {

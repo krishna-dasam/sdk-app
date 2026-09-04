@@ -219,6 +219,7 @@
       <button id="btn-rotate" type="button">Rotate Selected</button>
       <button id="btn-delete" class="danger" type="button">Delete Selected</button>
       <button id="btn-save" type="button">Save Document</button>
+      <button id="btn-export" type="button">Export</button>
     </header>
 
     <div class="workspace">
@@ -270,6 +271,7 @@
       rotate: document.getElementById("btn-rotate"),
       remove: document.getElementById("btn-delete"),
       save: document.getElementById("btn-save"),
+      exportBtn: document.getElementById("btn-export"),
       upload: document.getElementById("btn-upload"),
       printFrame: document.getElementById("print-frame")
     };
@@ -412,6 +414,29 @@
       setStatus("Deleted selected pages.");
     }
 
+    async function exportDocument() {
+      if (!hasDocument()) {
+        setStatus("Load a PDF to export.");
+        return;
+      }
+      setStatus("Exporting " + state.filename + "...");
+      const response = await fetch("/api/pdf/export/" + encodeURIComponent(state.filename));
+      if (!response.ok) {
+        setStatus("Export failed.");
+        return;
+      }
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = state.filename;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+      setStatus("Exported " + state.filename);
+    }
+
     async function saveDocument() {
       if (!hasDocument()) return;
       const blob = new Blob([state.bytes], { type: "application/pdf" });
@@ -471,6 +496,7 @@
     els.rotate.addEventListener("click", rotateSelected);
     els.remove.addEventListener("click", deleteSelected);
     els.save.addEventListener("click", saveDocument);
+    els.exportBtn.addEventListener("click", exportDocument);
     els.upload.addEventListener("click", () => els.fileInput.click());
     els.fileInput.addEventListener("change", async (event) => {
       const file = event.target.files && event.target.files[0];
