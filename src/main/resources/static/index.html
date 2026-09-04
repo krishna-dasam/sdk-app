@@ -284,6 +284,10 @@
       return Boolean(state.bytes && state.filename);
     }
 
+    function copyPdfBytes() {
+      return state.bytes.slice();
+    }
+
     async function fetchFileList() {
       const response = await fetch("/api/pdf/list");
       if (!response.ok) {
@@ -319,7 +323,7 @@
         return;
       }
       state.filename = filename;
-      state.bytes = await response.arrayBuffer();
+      state.bytes = new Uint8Array(await response.arrayBuffer());
       state.selected = new Set();
       state.scale = 1.25;
       renderFileList();
@@ -329,7 +333,7 @@
 
     async function refreshView() {
       if (!state.bytes) return;
-      const pdf = await pdfjsLib.getDocument({ data: new Uint8Array(state.bytes) }).promise;
+      const pdf = await pdfjsLib.getDocument({ data: copyPdfBytes() }).promise;
       state.pageCount = pdf.numPages;
       if (state.editMode) {
         renderGrid();
@@ -376,9 +380,9 @@
 
     async function withPdfLib(mutator) {
       if (!hasDocument()) return;
-      const pdfDoc = await PDFDocument.load(state.bytes);
+      const pdfDoc = await PDFDocument.load(copyPdfBytes());
       await mutator(pdfDoc);
-      state.bytes = await pdfDoc.save();
+      state.bytes = new Uint8Array(await pdfDoc.save());
       await refreshView();
     }
 
