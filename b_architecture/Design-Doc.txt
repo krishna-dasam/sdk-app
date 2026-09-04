@@ -1,0 +1,43 @@
+State Management Approach:
+
+Client-Side State: The raw ArrayBuffer of the
+currently opened PDF is held in memory (pdfBytes).
+Viewer State: pdf.js maintains the rendering state (scale, current
+page).
+Edit State: A JavaScript Set (selectedPages) tracks which pages are
+selected in the Document Editor mode. Document manipulations (rotate,
+delete) are applied in memory using pdf-lib, replacing the active
+pdfBytes.
+Server-Side State: The server acts strictly as a stateless file
+repository. Source-of-truth documents are persisted in the local file
+system.
+
+
+Key Tradeoffs Client-side vs Server-side Rendering: 
+
+Processing edits and rendering entirely in the browser (via WebAssembly/JS) 
+minimizes server compute costs and reduces latency for the user. The tradeoff is higher
+memory usage on the client's browser, which could struggle with massive
+(1GB+) PDFs.
+Library Selection: pdf.js and pdf-lib were chosen to avoid restrictive
+commercial SDK licensing while fulfilling all MVP requirements. While
+highly capable, pdf-lib lacks native UI components, necessitating custom
+grid and toolbar development compared to drop-in commercial
+alternatives.
+Linearization: pdf.js supports HTTP range requests for linearized PDFs
+out-of-the-box, but the current Spring Boot controller serves the whole
+file. Implementing HTTP 206 Partial Content is required for true fast
+web view.
+
+
+
+If I had 1 more day" Roadmap:
+
+Implement standard HTTP 206 Partial Content in PdfController.java to fully 
+utilize PDF linearization (Fast Web View).
+Thoroughly test all components and ensure the code adheres to established coding standards
+and best practices.
+Integrate a WebAssembly-based annotation layer to support text
+highlights and redaction tools.
+Implement caching strategies (e.g., Redis) on the backend for frequently
+accessed documents.

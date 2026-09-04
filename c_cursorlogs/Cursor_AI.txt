@@ -1,0 +1,29 @@
+- Write explanation "What you changed from AI output and why" Initially,
+I tried generating the code using Python. However, I ran into some
+uncertainty around the dependencies and packages that were being
+included, and I couldn’t confidently determine whether all of them were
+actually required for the solution. To avoid introducing unnecessary
+dependencies and to ensure the implementation was clean and
+maintainable, I decided to switch to Java and regenerate the code using
+Java instead. This gave me better control over the dependencies and
+resulted in a more reliable implementation.
+
+Also, I used a generic prompt in Cursor to generate the endpoints
+required for the PDF upload and download functionality. However, the
+generated implementation was too broad and included endpoints and logic
+that were not necessarily required for our specific use case. I realized
+that the prompts needed to be much more explicit and targeted. I
+therefore refined the prompts by clearly specifying each endpoint.
+
+For the UI portion, I needed to generate the HTML required for the user
+interface. I used ChatGPT to help build and refine the prompt that I
+then provided to Cursor. I made the prompt more specific by describing
+the expected UI structure, fields, actions, and layout, which helped
+Cursor generate HTML that was much closer to what was needed.
+
+- Write explanation "How you validated correctness" I validated the
+application using Cursor’s Bug Bot to identify potential issues and
+code-quality concerns, and no major issues were found. In addition to
+the automated review, I performed a basic functional validation by
+running the application locally and manually going through the key user
+flows. I verified that the core functionality was working as expected
