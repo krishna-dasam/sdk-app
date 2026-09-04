@@ -1,0 +1,484 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PDF Viewer and Editor SDK</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+  <script src="https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
+  <style>
+    :root {
+      --bg: #eef1f6;
+      --panel: #ffffff;
+      --ink: #1c2333;
+      --muted: #5b6578;
+      --line: #d7dde8;
+      --accent: #2563eb;
+      --accent-ink: #ffffff;
+      --danger: #dc2626;
+      --selected: #dbeafe;
+      --toolbar: #0f172a;
+    }
+
+    * { box-sizing: border-box; }
+
+    html, body {
+      margin: 0;
+      height: 100%;
+      font-family: "Segoe UI", system-ui, sans-serif;
+      color: var(--ink);
+      background: var(--bg);
+    }
+
+    .app {
+      display: grid;
+      grid-template-rows: auto 1fr auto;
+      height: 100%;
+    }
+
+    .toolbar {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 16px;
+      background: var(--toolbar);
+      color: #e2e8f0;
+    }
+
+    .brand {
+      font-weight: 700;
+      letter-spacing: 0.02em;
+      margin-right: 12px;
+      white-space: nowrap;
+    }
+
+    .toolbar button {
+      border: 0;
+      border-radius: 8px;
+      padding: 8px 12px;
+      background: #1e293b;
+      color: #f8fafc;
+      cursor: pointer;
+      font-size: 13px;
+    }
+
+    .toolbar button:hover:not(:disabled) { background: #334155; }
+    .toolbar button.active { background: var(--accent); }
+    .toolbar button.danger:hover:not(:disabled) { background: var(--danger); }
+    .toolbar button:disabled { opacity: 0.45; cursor: not-allowed; }
+
+    .workspace {
+      display: grid;
+      grid-template-columns: 280px 1fr;
+      min-height: 0;
+    }
+
+    .sidebar {
+      background: var(--panel);
+      border-right: 1px solid var(--line);
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+    }
+
+    .sidebar h2 {
+      margin: 0;
+      padding: 16px 16px 8px;
+      font-size: 14px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--muted);
+    }
+
+    .upload-row {
+      display: flex;
+      gap: 8px;
+      padding: 0 16px 12px;
+    }
+
+    .upload-row input[type="file"] { display: none; }
+
+    .upload-row button, .sidebar-status {
+      font-size: 13px;
+    }
+
+    .upload-row button {
+      width: 100%;
+      border: 1px dashed var(--line);
+      background: #f8fafc;
+      border-radius: 8px;
+      padding: 10px;
+      cursor: pointer;
+    }
+
+    #file-list {
+      list-style: none;
+      margin: 0;
+      padding: 0 8px 16px;
+      overflow: auto;
+    }
+
+    #file-list li {
+      padding: 10px 12px;
+      border-radius: 8px;
+      cursor: pointer;
+      color: var(--ink);
+    }
+
+    #file-list li:hover { background: #f1f5f9; }
+    #file-list li.active { background: var(--selected); color: #1d4ed8; font-weight: 600; }
+
+    .viewer {
+      min-height: 0;
+      overflow: auto;
+      padding: 24px;
+      display: flex;
+      justify-content: center;
+      align-items: flex-start;
+    }
+
+    #pdf-render {
+      background: white;
+      box-shadow: 0 12px 40px rgba(15, 23, 42, 0.15);
+      max-width: 100%;
+    }
+
+    #page-grid {
+      display: none;
+      width: 100%;
+      max-width: 980px;
+      grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+      gap: 16px;
+    }
+
+    #page-grid.visible { display: grid; }
+    #pdf-render.hidden { display: none; }
+
+    .page-item {
+      background: white;
+      border: 2px solid var(--line);
+      border-radius: 10px;
+      min-height: 200px;
+      padding: 16px;
+      cursor: pointer;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+    }
+
+    .page-item.selected {
+      border-color: var(--accent);
+      background: var(--selected);
+    }
+
+    .page-preview {
+      flex: 1;
+      border: 1px solid var(--line);
+      background: repeating-linear-gradient(
+        180deg,
+        #f8fafc,
+        #f8fafc 10px,
+        #eef2f7 10px,
+        #eef2f7 12px
+      );
+      border-radius: 4px;
+    }
+
+    .page-label {
+      margin-top: 12px;
+      text-align: center;
+      font-size: 13px;
+      color: var(--muted);
+    }
+
+    .status {
+      padding: 8px 16px;
+      border-top: 1px solid var(--line);
+      background: var(--panel);
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    #print-frame {
+      position: absolute;
+      width: 0;
+      height: 0;
+      border: 0;
+      visibility: hidden;
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header class="toolbar">
+      <div class="brand">PDF Viewer &amp; Editor SDK</div>
+      <button id="btn-edit" type="button">Edit Mode</button>
+      <button id="btn-print" type="button">Print</button>
+      <button id="btn-zoom-in" type="button">Zoom In</button>
+      <button id="btn-zoom-out" type="button">Zoom Out</button>
+      <button id="btn-rotate" type="button">Rotate Selected</button>
+      <button id="btn-delete" class="danger" type="button">Delete Selected</button>
+      <button id="btn-save" type="button">Save Document</button>
+    </header>
+
+    <div class="workspace">
+      <aside class="sidebar">
+        <h2>Documents</h2>
+        <div class="upload-row">
+          <input id="file-input" type="file" accept="application/pdf,.pdf" />
+          <button id="btn-upload" type="button">Upload PDF</button>
+        </div>
+        <ul id="file-list"></ul>
+      </aside>
+
+      <main class="viewer">
+        <canvas id="pdf-render"></canvas>
+        <div id="page-grid"></div>
+      </main>
+    </div>
+
+    <div class="status" id="status">Load a PDF to begin.</div>
+  </div>
+  <iframe id="print-frame" title="Print frame"></iframe>
+
+  <script>
+    pdfjsLib.GlobalWorkerOptions.workerSrc =
+      "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+
+    const { PDFDocument, degrees } = PDFLib;
+
+    const state = {
+      files: [],
+      filename: null,
+      bytes: null,
+      pageCount: 0,
+      scale: 1.25,
+      editMode: false,
+      selected: new Set()
+    };
+
+    const els = {
+      fileList: document.getElementById("file-list"),
+      fileInput: document.getElementById("file-input"),
+      canvas: document.getElementById("pdf-render"),
+      grid: document.getElementById("page-grid"),
+      status: document.getElementById("status"),
+      edit: document.getElementById("btn-edit"),
+      print: document.getElementById("btn-print"),
+      zoomIn: document.getElementById("btn-zoom-in"),
+      zoomOut: document.getElementById("btn-zoom-out"),
+      rotate: document.getElementById("btn-rotate"),
+      remove: document.getElementById("btn-delete"),
+      save: document.getElementById("btn-save"),
+      upload: document.getElementById("btn-upload"),
+      printFrame: document.getElementById("print-frame")
+    };
+
+    function setStatus(message) {
+      els.status.textContent = message;
+    }
+
+    function hasDocument() {
+      return Boolean(state.bytes && state.filename);
+    }
+
+    async function fetchFileList() {
+      const response = await fetch("/api/pdf/list");
+      if (!response.ok) {
+        throw new Error("Unable to load document list");
+      }
+      state.files = await response.json();
+      renderFileList();
+    }
+
+    function renderFileList() {
+      els.fileList.innerHTML = "";
+      if (!state.files.length) {
+        const empty = document.createElement("li");
+        empty.textContent = "No PDF files yet";
+        empty.style.cursor = "default";
+        els.fileList.appendChild(empty);
+        return;
+      }
+      state.files.forEach((name) => {
+        const item = document.createElement("li");
+        item.textContent = name;
+        if (name === state.filename) item.classList.add("active");
+        item.addEventListener("click", () => loadDocument(name));
+        els.fileList.appendChild(item);
+      });
+    }
+
+    async function loadDocument(filename) {
+      setStatus("Downloading " + filename + "...");
+      const response = await fetch("/api/pdf/download/" + encodeURIComponent(filename));
+      if (!response.ok) {
+        setStatus("Failed to download " + filename);
+        return;
+      }
+      state.filename = filename;
+      state.bytes = await response.arrayBuffer();
+      state.selected = new Set();
+      state.scale = 1.25;
+      renderFileList();
+      await refreshView();
+      setStatus("Loaded " + filename);
+    }
+
+    async function refreshView() {
+      if (!state.bytes) return;
+      const pdf = await pdfjsLib.getDocument({ data: new Uint8Array(state.bytes) }).promise;
+      state.pageCount = pdf.numPages;
+      if (state.editMode) {
+        renderGrid();
+      } else {
+        await renderPage(pdf, 1);
+      }
+    }
+
+    async function renderPage(pdf, pageNumber) {
+      const page = await pdf.getPage(pageNumber);
+      const viewport = page.getViewport({ scale: state.scale });
+      const canvas = els.canvas;
+      const context = canvas.getContext("2d");
+      canvas.width = viewport.width;
+      canvas.height = viewport.height;
+      await page.render({ canvasContext: context, viewport }).promise;
+    }
+
+    function renderGrid() {
+      els.grid.innerHTML = "";
+      for (let i = 0; i < state.pageCount; i += 1) {
+        const item = document.createElement("div");
+        item.className = "page-item" + (state.selected.has(i) ? " selected" : "");
+        item.innerHTML =
+          '<div class="page-preview"></div><div class="page-label">Page ' + (i + 1) + "</div>";
+        item.addEventListener("click", () => {
+          if (state.selected.has(i)) {
+            state.selected.delete(i);
+          } else {
+            state.selected.add(i);
+          }
+          renderGrid();
+        });
+        els.grid.appendChild(item);
+      }
+    }
+
+    function setEditMode(enabled) {
+      state.editMode = enabled;
+      els.edit.classList.toggle("active", enabled);
+      els.grid.classList.toggle("visible", enabled);
+      els.canvas.classList.toggle("hidden", enabled);
+    }
+
+    async function withPdfLib(mutator) {
+      if (!hasDocument()) return;
+      const pdfDoc = await PDFDocument.load(state.bytes);
+      await mutator(pdfDoc);
+      state.bytes = await pdfDoc.save();
+      await refreshView();
+    }
+
+    async function rotateSelected() {
+      if (!state.selected.size) {
+        setStatus("Select one or more pages to rotate.");
+        return;
+      }
+      await withPdfLib(async (pdfDoc) => {
+        state.selected.forEach((index) => {
+          const page = pdfDoc.getPage(index);
+          const current = page.getRotation().angle;
+          page.setRotation(degrees((current + 90) % 360));
+        });
+      });
+      setStatus("Rotated " + state.selected.size + " page(s) by 90 degrees.");
+    }
+
+    async function deleteSelected() {
+      if (!state.selected.size) {
+        setStatus("Select one or more pages to delete.");
+        return;
+      }
+      if (state.selected.size >= state.pageCount) {
+        setStatus("A document must keep at least one page.");
+        return;
+      }
+      const descending = [...state.selected].sort((a, b) => b - a);
+      await withPdfLib(async (pdfDoc) => {
+        descending.forEach((index) => pdfDoc.removePage(index));
+      });
+      state.selected = new Set();
+      setStatus("Deleted selected pages.");
+    }
+
+    async function saveDocument() {
+      if (!hasDocument()) return;
+      const blob = new Blob([state.bytes], { type: "application/pdf" });
+      const formData = new FormData();
+      formData.append("file", blob, state.filename);
+      const response = await fetch("/api/pdf/upload", { method: "POST", body: formData });
+      if (!response.ok) {
+        setStatus("Save failed.");
+        return;
+      }
+      const message = await response.text();
+      await fetchFileList();
+      setStatus(message || "Saved " + state.filename);
+    }
+
+    async function uploadFile(file) {
+      const formData = new FormData();
+      formData.append("file", file, file.name);
+      const response = await fetch("/api/pdf/upload", { method: "POST", body: formData });
+      if (!response.ok) {
+        setStatus("Upload failed.");
+        return;
+      }
+      await fetchFileList();
+      await loadDocument(file.name);
+    }
+
+    function printDocument() {
+      if (!hasDocument()) return;
+      const blob = new Blob([state.bytes], { type: "application/pdf" });
+      const url = URL.createObjectURL(blob);
+      const iframe = els.printFrame;
+      iframe.onload = () => {
+        iframe.contentWindow.focus();
+        iframe.contentWindow.print();
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+      };
+      iframe.src = url;
+    }
+
+    els.edit.addEventListener("click", async () => {
+      if (!hasDocument()) return;
+      setEditMode(!state.editMode);
+      await refreshView();
+    });
+    els.print.addEventListener("click", printDocument);
+    els.zoomIn.addEventListener("click", async () => {
+      if (!hasDocument() || state.editMode) return;
+      state.scale = Math.min(state.scale + 0.25, 4);
+      await refreshView();
+    });
+    els.zoomOut.addEventListener("click", async () => {
+      if (!hasDocument() || state.editMode) return;
+      state.scale = Math.max(state.scale - 0.25, 0.5);
+      await refreshView();
+    });
+    els.rotate.addEventListener("click", rotateSelected);
+    els.remove.addEventListener("click", deleteSelected);
+    els.save.addEventListener("click", saveDocument);
+    els.upload.addEventListener("click", () => els.fileInput.click());
+    els.fileInput.addEventListener("change", async (event) => {
+      const file = event.target.files && event.target.files[0];
+      event.target.value = "";
+      if (file) await uploadFile(file);
+    });
+
+    fetchFileList().catch((error) => setStatus(error.message));
+  </script>
+</body>
+</html>
